@@ -1,33 +1,37 @@
+--function love.errhand(msg)
+--	love.audio.stop()
+--	love.run()
+--end
+
 function love.load()
+	require "sasorgasm"
+	loadtrack()
+	savetrack()
 	
+	require "timeattack"
 	require "normal"
 	require "menu"
 	require "highscoreentry"
-	require "options"
-	require "intro"
 	
 	------------
 	--SETTINGS--
 	------------
+	shapedebug = false
+	textdebug = false
 	soundenabled = true
-	fullscreen = false
+	fullscreen = true
 	joystickdeadzone = 0.5
-	
-	numhighscores = 9
 	
 	gravitymul = 260
 	
-	scale = 2
+	scale = 4
 	zoom = 1
 	
-	controlmethods = {"mouse", "keyboard", "mouse direction", "joystick", "wheel steering", "wheel direct"}
-	controldescriptions = {	mouse="move the mouse\n\nleft and right",
-							keyboard="use arrow keys to\n\nrotate, shift to\n\nspeed up",
-							['mouse direction']="point with your\n\nmouse towards a\n\ndirection",
-							joystick="point with your\n\njoystick",
-							['wheel steering']="drive like a car",
-							['wheel direct']="1:1 wheel to\n\ngame translation"}
-	controlmethod = "mouse"
+	keyboardcontrol = false
+	mousecontrol = false
+	wheelcontrol1 = true
+	wheelcontrol2 = false
+	joystickcontrol = false
 	
 	pacfocus = false
 	superpower = "normal" --clone, walls, normal
@@ -37,29 +41,31 @@ function love.load()
 	highscore = 0
 	deathtime = 1.5
 	deathdelay = 1
-	mouse2rate = 0.05
-	mouse2speed = 20 --50 for my macbook because who knows why, 20 else
-	volume = 10
 	
 	pacmouthlimit = 0.25
 	mouthduration = 0.22
 	
-	whitelist = "abcdefghijklmnopqrstuvwxyz 0123456789"
-	
-	scale = 2
+	whitelist = "abcdefghijklmnopqrstuvwxyz    0123456789"
 	
 	----END----
 	
-	loadhighscores()
+	windowwidth = 1680
+	windowheight = 1050
+
+	screenwidth = 1500
+	screenheight = 1050
 	
-	icon = love.graphics.newImage("graphics/icon.png");icon:setFilter("nearest", "nearest")
-	changescale(scale)
+	fsaa = 2
+	vsync = true
+	
+	love.graphics.setMode(windowwidth, windowheight, fullscreen, vsync, fsaa)
 	
 	boardwidth = 220
 	boardheight = 216
 	
 	--GRAPHICS--
 	
+	titlesideways = love.graphics.newImage("graphics/titlesideways.png");titlesideways:setFilter("nearest", "nearest") 
 	mainfield = love.graphics.newImage("graphics/field.png");mainfield:setFilter("nearest", "nearest") 
 	mainfieldoverlay = love.graphics.newImage("graphics/fieldoverlay.png");mainfieldoverlay:setFilter("nearest", "nearest") 
 	superpellet = love.graphics.newImage("graphics/superpellet.png");superpellet:setFilter("nearest", "nearest") 
@@ -67,71 +73,126 @@ function love.load()
 	ghost1 = love.graphics.newImage("graphics/ghost1.png")
 	ghost2 = love.graphics.newImage("graphics/ghost2.png")
 	ghost3 = love.graphics.newImage("graphics/ghost3.png")
-	ghostscared1 = love.graphics.newImage("graphics/ghostscared1.png")
-	ghostscared2 = love.graphics.newImage("graphics/ghostscared2.png")
-	ghosteyes = love.graphics.newImage("graphics/eyes.png")
-	spinnyeyes = love.graphics.newImage("graphics/spinnyeyes.png")
+	ghostscared = love.graphics.newImage("graphics/ghostscared.png")
 	title = love.graphics.newImage("graphics/title.png");title:setFilter("nearest", "nearest") 
 	gamescoreimg = love.graphics.newImage("graphics/gamescore.png");gamescoreimg:setFilter("nearest", "nearest") 
 	highscoreimg = love.graphics.newImage("graphics/highscore.png");highscoreimg:setFilter("nearest", "nearest") 
-	gameoverimg = love.graphics.newImage("graphics/gameover.png");gameoverimg:setFilter("nearest", "nearest") 
 	clockimg = love.graphics.newImage("graphics/clock.png");clockimg:setFilter("nearest", "nearest") 
-	optionsimg = love.graphics.newImage("graphics/options.png");optionsimg:setFilter("nearest", "nearest") 
-	logo = love.graphics.newImage("graphics/logo.png")
-	logoblood = love.graphics.newImage("graphics/logoblood.png")
-	
 	
 	fontimage = love.graphics.newImage("graphics/font.png");fontimage:setFilter("nearest","nearest")
-	pacmanfont = love.graphics.newImageFont(fontimage, "0123456789abcdefghijklmnopqrstuvwxyz.:/,'C-_> <")
+	pacmanfont = love.graphics.newImageFont(fontimage, "0123456789abcdefghijklmnopqrstuvwxyz.:/,'C-_> ")
 	love.graphics.setFont(pacmanfont)
 	
 	--SOUNDS--
-	wakka1 = love.audio.newSource("sounds/pacman_waka_wa.ogg", "static")
-	wakka2 = love.audio.newSource("sounds/pacman_waka_ka.ogg", "static")
-	eatghost = love.audio.newSource("sounds/eat_ghost.ogg", "static"); eatghost:setVolume(0.5)
-	ghostsiren = love.audio.newSource("sounds/ghosts_siren.ogg", "static"); ghostsiren:setVolume(0); ghostsiren:setLooping(true)
-	ghostrunaway = love.audio.newSource("sounds/ghosts_runaway.ogg", "static"); ghostrunaway:setVolume(0); ghostrunaway:setLooping(true)
-	beginning = love.audio.newSource("sounds/pacman_beginning.ogg", "static")
-	gamewin = love.audio.newSource("sounds/win.ogg", "static")
-	death = love.audio.newSource("sounds/pacman_death.ogg", "static")
-	stabsound = love.audio.newSource("sounds/stab.ogg", "static")
+	wakka = love.audio.newSource("sounds/pacman_chomp.wav", "static")
+	beginning = love.audio.newSource("sounds/pacman_beginning.wav", "static")
+	death = love.audio.newSource("sounds/pacman_death.wav", "static")
 	
-	intro_load()
+	loadhighscores()
+	
+	--menu_load()
+	
+	eatored = 201
+	gametime = 12
+	
+	normal_load()
 end
 
 function love.update(dt)
-	if skipupdate then
-		skipupdate = false
-		return
-	end
-	
-	dt = math.min(dt, 1/30)
-	if _G[gamestate .. "_update"] then
-		_G[gamestate .. "_update"](dt)
+	if gamestate == "timeattack" then
+		timeattack_update(dt)
+	elseif gamestate == "normal" then
+		normal_update(dt)
+	elseif gamestate == "menu" then
+		menu_update(dt)
+	elseif gamestate == "highscoreentry" then
+		highscoreentry_update(dt)
 	end
 end
 
 function love.draw()
-	if _G[gamestate .. "_draw"] then
-		_G[gamestate .. "_draw"]()
+	if gamestate == "timeattack" then
+		timeattack_draw()
+	elseif gamestate == "normal" then
+		normal_draw()
+	elseif gamestate == "menu" then
+		menu_draw()
+	elseif gamestate == "highscoreentry" then
+		highscoreentry_draw()
+	end
+	
+	love.graphics.draw(titlesideways, 6*scale, (screenheight-224*scale)/2, 0, scale, scale)
+	
+	
+	--Highscores n shit	
+	love.graphics.draw(highscoreimg, windowwidth-49*scale, screenheight/2-115*scale, 0, scale, scale)
+	for i = 1, #highscoreA do
+		if tonumber(highscoreA[i][1]) >= 0 then
+			--name
+			love.graphics.setColor(252, 152, 56)
+			love.graphics.print(string.lower(string.sub(highscoreA[i][3], 1, 6)), windowwidth-49*scale, (20+20*i)*scale, 0, scale)
+			love.graphics.setColor(255, 255, 255)
+			--score
+			local s = highscoreA[i][1] .. " "
+			local s2 = highscoreA[i][2] .. ""
+			
+			if math.mod(highscoreA[i][2], 1) == 0 then
+				s2 = s2 .. ".0"
+			end
+			
+			if string.len(s2) > 5 then
+				s2 = string.sub(s2, 1, string.len(s2)-2)
+			end
+			
+			local offsetX = -64*scale
+			love.graphics.print(s, windowwidth-(1+9)*scale+offsetX, (28+20*i)*scale, 0, scale)
+			love.graphics.setColor(255, 255, 0)
+			love.graphics.rectangle( "fill", windowwidth-(9+7)*scale+offsetX, (30+20*i)*scale, 4*scale, 4*scale)
+			love.graphics.setColor(127, 127, 127)
+			
+			local offsetX = 0
+			for i = 1, s2:len() - 1 do
+				offsetX = offsetX - 8*scale
+			end
+			love.graphics.print(s2, windowwidth-9*scale+offsetX, (28+20*i)*scale, 0, scale)
+			love.graphics.setColor(255, 255, 255)
+			love.graphics.draw(clockimg, windowwidth-(8+9)*scale+offsetX, (28+20*i)*scale, 0, scale)
+			
+			love.graphics.setColor(120, 0, 0)
+			love.graphics.rectangle("fill", windowwidth-81*scale, (17+20*i)*scale, 80*scale, scale)
+			love.graphics.setColor(255, 255, 255)
+		end
 	end
 end
 
-function love.keypressed(key, unicode)
-	if _G[gamestate .. "_keypressed"] then
-		_G[gamestate .. "_keypressed"](key, unicode)
+function love.keypressed(key)
+	if key == "escape" then
+		love.event.push("q")
+	end
+	if gamestate == "timeattack" then
+		timeattack_keypressed(key)
+	elseif gamestate == "normal" then
+		normal_keypressed(key)
+	elseif gamestate == "menu" then
+		menu_keypressed(key)
+	elseif gamestate == "highscoreentry" then
+	
 	end
 end
 
 function love.mousepressed(x, y, button)
-	if _G[gamestate .. "_mousepressed"] then
-		_G[gamestate .. "_mousepressed"](x, y, button)
+	if gamestate == "timeattack" then
+		timeattack_mousepressed(x, y, button)
+	elseif gamestate == "normal" then
+		normal_mousepressed(x, y, button)
 	end
 end
 
 function love.joystickpressed(joystick, button)
-	if _G[gamestate .. "_joystickpressed"] then
-		_G[gamestate .. "_joystickpressed"](joystick, button)
+	if gamestate == "menu" then
+		menu_joystickpressed(joystick, button)
+	elseif gamestate == "highscoreentry" then
+		highscoreentry_joystickpressed(joystick, button)
 	end
 end
 
@@ -148,33 +209,6 @@ function string:split(delimiter) --Not by me
 	return result
 end
 
-function changescale(s)
-	local grabbed = love.mouse.isGrabbed()
-	scale = s
-	
-	windowwidth = 320*scale
-	windowheight = 250*scale
-
-	screenwidth = windowwidth
-	screenheight = windowheight
-	
-	
-	fsaa = 16
-	vsync = true
-	love.graphics.setLineWidth(5/3*scale)
-	
-	if gamestate == "options" then
-		options_createdemoworld()
-	end
-	
-	if love.graphics.getWidth() ~= windowwidth or love.graphics.getHeight() ~= windowheight then
-		love.graphics.setMode(windowwidth, windowheight, fullscreen, vsync, fsaa)
-	end
-	
-	love.graphics.setIcon(icon)
-	
-	love.mouse.setGrab(grabbed)
-end
 
 function print_r (t, indent) --Not by me
 	local indent=indent or ''
@@ -187,14 +221,7 @@ end
 
 function loadhighscores()
 	if love.filesystem.exists("highscoreA") then
-		local s = love.filesystem.read("highscoreA"):split("#")
-		if #s < 2 then
-			s[3] = s[1]
-		else
-			controlmethod = s[1]
-			scale = tonumber(s[2])
-		end
-		local t = s[3]
+		local t = love.filesystem.read("highscoreA")
 		highscoreA = t:split(";")
 		for i = 1, #highscoreA do
 			highscoreA[i] = highscoreA[i]:split(":")
@@ -203,29 +230,20 @@ function loadhighscores()
 		end
 	else
 		highscoreA = {}
-		for i = 1, numhighscores do
+		for i = 1, 10 do
 			highscoreA[i] = {0, 0, "------"}
 		end
 	end
 	
 	savehighscoresA()
-end
-
-function savehighscoresA()
-	local s = controlmethod .. "#"
-	local s = s .. scale .. "#"
-	for i = 1, numhighscores do
-		if (highscoreA[i][1] and highscoreA[i][2] and highscoreA[i][3]) then
-			s = s .. highscoreA[i][1] .. ":" .. highscoreA[i][2] .. ":" .. highscoreA[i][3]
-		else
-			s = s .. "------" .. ":0:0"
-		end
-		if i ~= numhighscores then
-			s = s .. ";"
-		end
-	end
 	
-	love.filesystem.write("highscoreA", s)
+	if love.filesystem.exists("highscoreB") then
+		local t = love.filesystem.read("highscoreB")
+		highscoreB = tonumber(t)
+	else
+		highscoreB = 0
+		love.filesystem.write("highscoreB", "0")
+	end
 end
 
 function addzeros(s, i)
