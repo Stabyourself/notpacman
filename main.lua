@@ -1,5 +1,9 @@
 function love.load()
-	
+	isweb = love.system.getOS() == "Web"
+	if isweb then
+		love.event.quit = function() end
+	end
+
 	require "normal"
 	require "menu"
 	require "highscoreentry"
@@ -16,7 +20,11 @@ function love.load()
 	numhighscores = 9
 	
 	gravitymul = 260
-	
+	wallshrink = 0.3 --box2d polygon skin
+	wallrelease = 0.7
+	wallfriction = 1000
+	ballfriction = 0.5
+
 	scale = 2
 	zoom = 1
 	
@@ -28,6 +36,9 @@ function love.load()
 							['wheel steering']="drive like a car",
 							['wheel direct']="1:1 wheel to\n\ngame translation"}
 	controlmethod = "mouse"
+	if isweb then
+		controlmethod = "keyboard" --mouse needs a click first in a browser
+	end
 	
 	pacfocus = false
 	superpower = "normal" --clone, walls, normal
@@ -39,6 +50,7 @@ function love.load()
 	deathdelay = 1
 	mouse2rate = 0.05
 	mouse2speed = 20 --50 for my macbook because who knows why, 20 else
+	mousemovement = 0 --for relative mode in browsers
 	volume = 10
 	
 	pacmouthlimit = 0.25
@@ -51,10 +63,15 @@ function love.load()
 	----END----
 	
 	loadhighscores()
-	
-	icon = love.graphics.newImage("graphics/icon.png");icon:setFilter("nearest", "nearest")
+	if isweb then
+		scale = 2
+	end
+
 	changescale(scale)
-	
+	if isweb then
+		fitwindow(love.graphics.getDimensions())
+	end
+
 	boardwidth = 220
 	boardheight = 216
 	
@@ -81,8 +98,8 @@ function love.load()
 	logoblood = love.graphics.newImage("graphics/logoblood.png")
 	
 	
-	fontimage = love.graphics.newImage("graphics/font.png");fontimage:setFilter("nearest","nearest")
-	pacmanfont = love.graphics.newImageFont(fontimage, "0123456789abcdefghijklmnopqrstuvwxyz.:/,'C-_> <")
+	pacmanfont = love.graphics.newImageFont("graphics/font.png", "0123456789abcdefghijklmnopqrstuvwxyz.:/,'C-_> <")
+	pacmanfont:setFilter("nearest","nearest")
 	love.graphics.setFont(pacmanfont)
 	
 	--SOUNDS--
@@ -112,15 +129,36 @@ function love.update(dt)
 end
 
 function love.draw()
+	if isweb then
+		love.graphics.scale(webscale)
+	end
 	if _G[gamestate .. "_draw"] then
 		_G[gamestate .. "_draw"]()
 	end
 end
 
-function love.keypressed(key, unicode)
+function love.keypressed(key)
+	keyjustpressed = true
+
 	if _G[gamestate .. "_keypressed"] then
-		_G[gamestate .. "_keypressed"](key, unicode)
+		_G[gamestate .. "_keypressed"](key)
 	end
+end
+
+function love.textinput(text)
+	--no key repeat
+	if not keyjustpressed then
+		return
+	end
+	keyjustpressed = false
+
+	if _G[gamestate .. "_textinput"] then
+		_G[gamestate .. "_textinput"](text)
+	end
+end
+
+function love.mousemoved(x, y, dx, dy)
+	mousemovement = mousemovement + dx
 end
 
 function love.mousepressed(x, y, button)
@@ -160,20 +198,36 @@ function changescale(s)
 	
 	
 	fsaa = 16
-	vsync = true
+	vsync = 1
 	love.graphics.setLineWidth(5/3*scale)
 	
 	if gamestate == "options" then
 		options_createdemoworld()
 	end
 	
-	if love.graphics.getWidth() ~= windowwidth or love.graphics.getHeight() ~= windowheight then
-		love.graphics.setMode(windowwidth, windowheight, fullscreen, vsync, fsaa)
+	if not isweb and (love.graphics.getWidth() ~= windowwidth or love.graphics.getHeight() ~= windowheight) then
+		love.window.setMode(windowwidth, windowheight, {fullscreen = fullscreen, vsync = vsync, msaa = fsaa})
 	end
-	
-	love.graphics.setIcon(icon)
-	
-	love.mouse.setGrab(grabbed)
+
+	love.mouse.setGrabbed(grabbed)
+end
+
+function fitwindow(w, h)
+	webscale = math.min(w/windowwidth, h/windowheight)
+end
+
+function love.resize(w, h)
+	if isweb then
+		fitwindow(w, h)
+	end
+end
+
+function mouseposition()
+	local x, y = love.mouse.getPosition()
+	if isweb then
+		return x/webscale, y/webscale
+	end
+	return x, y
 end
 
 function print_r (t, indent) --Not by me
@@ -186,7 +240,7 @@ function print_r (t, indent) --Not by me
 end
 
 function loadhighscores()
-	if love.filesystem.exists("highscoreA") then
+	if love.filesystem.getInfo("highscoreA") then
 		local s = love.filesystem.read("highscoreA"):split("#")
 		if #s < 2 then
 			s[3] = s[1]
@@ -233,4 +287,67 @@ function addzeros(s, i)
 		s = "0" .. s
 	end
 	return s
+end
+
+function joystickaxis(i)
+	local joystick = love.joystick.getJoysticks()[1]
+	if joystick then
+		return joystick:getAxis(i)
+	end
+	return 0
+end
+
+function newwall(body, x, y, width, height)
+	local shape = love.physics.newRectangleShape(x, y, width-wallshrink*2, height-wallshrink*2)
+	local fixture = love.physics.newFixture(body, shape)
+	fixture:setFriction(wallfriction)
+	fixture:setRestitution(0.1)
+	return fixture
+end
+
+function newball(body, radius)
+	local fixture = love.physics.newFixture(body, love.physics.newCircleShape(0, 0, radius))
+	fixture:setFriction(ballfriction)
+	fixture:setRestitution(0.1)
+	body:setMassData(0, 0, 0.1, 0.9)
+	body:setBullet(true)
+	return fixture
+end
+
+function wallpresolve(a, b, contact)
+	--balls got stuck in corners, so walls let go when gravity pulls the ball away
+	local ball, nx, ny
+	if a:getBody():getType() == "static" then
+		ball = b:getBody()
+		nx, ny = contact:getNormal()
+		nx, ny = -nx, -ny
+	elseif b:getBody():getType() == "static" then
+		ball = a:getBody()
+		nx, ny = contact:getNormal()
+	else
+		return
+	end
+	
+	local gx, gy = ball:getWorld():getGravity()
+	local vx, vy = ball:getLinearVelocity()
+	if gx*nx + gy*ny < -wallrelease*math.sqrt(gx^2 + gy^2) and vx*nx + vy*ny < 1 then
+		contact:setEnabled(false)
+	end
+end
+
+function grabmouse()
+	if controlmethod == "mouse" then
+		love.mouse.setVisible(false)
+		love.mouse.setGrabbed(true)
+	elseif controlmethod == "mouse direction" then
+		love.mouse.setGrabbed(true)
+		love.mouse.setVisible(true)
+	else
+		love.mouse.setGrabbed(false)
+		love.mouse.setVisible(true)
+	end
+
+	--can't move the cursor in a browser
+	love.mouse.setRelativeMode(isweb and controlmethod == "mouse")
+	mousemovement = 0
 end

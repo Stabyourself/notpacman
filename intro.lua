@@ -31,19 +31,20 @@ function intro_draw()
 		s = 0.5
 	end
 	if introprogress >= 0 and introprogress < introduration then
-		local a = 255
+		local a = 1
 		if introprogress < introfadetime then
-			a = introprogress/introfadetime * 255
+			a = introprogress/introfadetime
 		elseif introprogress >= introduration-introfadetime then
-			a = (1-(introprogress-(introduration-introfadetime))/introfadetime) * 255
+			a = (1-(introprogress-(introduration-introfadetime))/introfadetime)
 		end
-		
-		love.graphics.setColor(255, 255, 255, a)
-		
+
+		love.graphics.setColor(1, 1, 1, a)
+
 		if introprogress > introfadetime+0.3 and introprogress < introduration - introfadetime then
 			local y = (introprogress-0.2-introfadetime) / (introduration-introfadetime) * screenheight*5
 			love.graphics.draw(logo, screenwidth/2, screenheight/2, 0, s, s, 142, 150)
-			love.graphics.setScissor(0, screenheight - y, screenwidth, y)
+			local k = isweb and webscale or 1 --setscissor ignores scale
+			love.graphics.setScissor(0, math.floor(screenheight - y + 0.5)*k, screenwidth*k, math.floor(y + 0.5)*k)
 			love.graphics.draw(logoblood, screenwidth/2, screenheight/2, 0, s, s, 142, 150)
 			love.graphics.setScissor()
 		elseif introprogress >= introduration - introfadetime then

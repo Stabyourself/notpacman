@@ -1,10 +1,16 @@
 function love.conf(t)
-	t.title = "Not Pacman"
+	t.version = "11.5"
 	t.identity = "not_pacman"
-	t.author = "Maurice"
 	t.console = false
-	t.screen.vsync = true
-	t.screen.fsaa = 16
-	t.screen.width = 640
-	t.screen.height = 500
+	t.window.title = "Not Pacman"
+	t.window.icon = "graphics/icon.png"
+	t.window.vsync = 1
+	t.window.msaa = 16
+	t.window.width = 640
+	t.window.height = 500
+
+	if love._os == "Web" then
+		t.window.resizable = true
+		t.window.highdpi = true
+	end
 end

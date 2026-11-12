@@ -3,12 +3,9 @@ function normal_load() --initializes all variables
 	gamestate = "normal"
 	gamestarted = false
 	
-	if controlmethod == "mouse" then
-		love.mouse.setVisible(false)
-		love.mouse.setGrab(true)
-	elseif controlmethod == "mouse direction" then
+	grabmouse()
+	if controlmethod == "mouse direction" then
 		love.mouse.setPosition(screenwidth/2, screenheight/4)
-		love.mouse.setGrab(true)
 	end
 	
 	normal_createworld()
@@ -161,11 +158,10 @@ function normal_update(dt)
 			if currenttime - poweruptimer > powerupduration then
 				powerup = false
 				if superpower == "walls" then
-					pacmanshape:setMask()
+					pacmanfixture:setMask()
 				elseif superpower == "clone" then
 					clonebody:destroy()
-					cloneshape:destroy()
-					pacmanshape:setMask()
+					pacmanfixture:setMask()
 				end
 			end
 		end
@@ -178,13 +174,13 @@ function normal_update(dt)
 		
 		--joystick
 		if controlmethod == "joystick" then
-			x = love.joystick.getAxis( 0, 0 )
-			y = -love.joystick.getAxis( 0, 1 )
+			x = joystickaxis(1)
+			y = -joystickaxis(2)
 			if math.abs(x) + math.abs(y) > joystickdeadzone then
 				targetrotation = math.deg(math.atan2(x, y) )
 			end
 		elseif controlmethod == "wheel steering" then
-			x = love.joystick.getAxis( 0, 0)
+			x = joystickaxis(1)
 			targetrotation = targetrotation+x*dt*400
 			if targetrotation < 0 then
 				targetrotation = targetrotation + 360
@@ -192,7 +188,7 @@ function normal_update(dt)
 				targetrotation = targetrotation - 360
 			end
 		elseif controlmethod == "wheel direct" then
-			x = love.joystick.getAxis( 0, 0)
+			x = joystickaxis(1)
 			targetrotation = x*180
 			if targetrotation < 0 then
 				targetrotation = targetrotation + 360
@@ -211,14 +207,17 @@ function normal_update(dt)
 				normal_updategravity(dt)
 			end
 		elseif controlmethod == "mouse direction" then
-			x, y = love.mouse.getPosition( )
+			x, y = mouseposition()
 			x = x - screenwidth/2
 			y = (screenheight - y) - screenheight/2
 			targetrotation = math.deg(math.atan2(x, y))
 			normal_updategravity(dt)
+		elseif controlmethod == "mouse" and isweb then
+			targetrotation = targetrotation+mousemovement*dt*mouse2speed
+			mousemovement = 0
 		elseif controlmethod == "mouse" then
 			x, y = love.mouse.getPosition()
-			
+		
 			if oldx then
 				diff = x-oldx
 				targetrotation = targetrotation+diff*dt*mouse2speed
@@ -340,12 +339,12 @@ function normal_update(dt)
 		
 		--wake up ghosts so they don't get stuck. Fucking box2d, how does it work
 		for i = 1, 3 do	
-			ghostbody[i]:wakeUp()
+			ghostbody[i]:setAwake(true)
 			prevghostpos[i] = {ghostbody[i]:getX(), ghostbody[i]:getY()}
 		end
 		
-		world:update(dt)
-	end
+		world:update(dt, 10, 10)
+end
 end
 
 function normal_stopgamesounds()
@@ -383,8 +382,8 @@ function normal_draw()
 	
 	--guideline for joystick
 	if joystickcontrol and deathtimer == deathtime+deathdelay then
-		x = love.joystick.getAxis( 0, 0 )
-		y = love.joystick.getAxis( 0, 1 )
+		x = joystickaxis(1)
+		y = joystickaxis(2)
 		love.graphics.line(screenwidth/2, screenheight/2, screenwidth/2+x*(screenheight/2), screenheight/2+y*(screenheight/2))
 	end
 	
@@ -403,7 +402,7 @@ function normal_draw()
 	love.graphics.draw( mainfield, fieldbody:getX()+1, fieldbody:getY()+1, 0, scale, scale, boardwidth/2, boardheight/2)
 	
 	--pellets!
-	love.graphics.setColor(255, 255, 0)
+	love.graphics.setColor(1, 1, 0)
 	for y = 1, 29 do
 		for x = 1, 26 do
 		
@@ -416,7 +415,7 @@ function normal_draw()
 		end
 	end
 	
-	love.graphics.setColor(255, 255, 255, 255)
+	love.graphics.setColor(1, 1, 1, 1)
 	--pac:			
 	local x = (pacmanbody:getX()-screenwidth/2)*(scale/2)+screenwidth/2
 	local y = (pacmanbody:getY()-screenheight/2)*(scale/2)+screenheight/2
@@ -430,9 +429,9 @@ function normal_draw()
 	end
 	
 	if #coords > 6 then
-		love.graphics.setColor(255, 255, 50)
+		love.graphics.setColor(1, 1, 50/255)
 		love.graphics.polygon("fill", unpack(coords))
-		love.graphics.setColor(255, 255, 255)
+		love.graphics.setColor(1, 1, 1)
 	end
 	
 	
@@ -444,7 +443,7 @@ function normal_draw()
 					--powerup blink
 					local timeleft = powerupduration - (love.timer.getTime() - poweruptimer)
 					
-					if timeleft < blinktime and math.mod((timeleft), blinkrate*2)<blinkrate then
+					if timeleft < blinktime and math.fmod((timeleft), blinkrate*2)<blinkrate then
 						love.graphics.draw( ghostscared2, (ghostbody[i]:getX()-screenwidth/2)*(scale/2)+screenwidth/2, (ghostbody[i]:getY()-screenheight/2)*(scale/2)+screenheight/2, ghostbody[i]:getAngle(), scale/41, scale/41, 256, 256)
 					else
 						love.graphics.draw( ghostscared1, (ghostbody[i]:getX()-screenwidth/2)*(scale/2)+screenwidth/2, (ghostbody[i]:getY()-screenheight/2)*(scale/2)+screenheight/2, ghostbody[i]:getAngle(), scale/41, scale/41, 256, 256)
@@ -469,7 +468,7 @@ function normal_draw()
 	love.graphics.draw( mainfieldoverlay, fieldbody:getX()+1, fieldbody:getY()+1, 0, scale, scale, boardwidth/2, boardheight/2)
 	
 	
-	love.graphics.setColor(255, 255, 255)
+	love.graphics.setColor(1, 1, 1)
 	
 	
 	--Rotate
@@ -481,77 +480,71 @@ end
 
 function normal_createworld() --creates world and all physics objects
 	local scale = 2
-	world = love.physics.newWorld( screenwidth/2-400, screenwidth/2-400, screenwidth/2+400, screenwidth/2+400, 0, 800, false)
-	
-	fieldbody = love.physics.newBody(world, screenwidth / 2, screenheight / 2, 0, 0)
-	fieldbody:setBullet(true)
-	worldshapes = {}
+	world = love.physics.newWorld(0, 800, false)
+	world:setCallbacks(nil, nil, wallpresolve)
+
+	fieldbody = love.physics.newBody(world, screenwidth / 2, screenheight / 2, "static")
+	worldfixtures = {}
 
 	--Not to be masked: 1, 2, 3, 4, 5, 6, 20, 21, 23, 26
 	--No, I wrote a program to grab these for me easily.
 	
-	worldshapes[1] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, -110.5*scale+1, 220.0*scale-1, 11.0*scale-1)
-	worldshapes[2] = love.physics.newRectangleShape(fieldbody, -112.5*scale+1, -61.0*scale+1, 11.0*scale-1, 94.0*scale-1)
-	worldshapes[3] = love.physics.newRectangleShape(fieldbody, -112.5*scale+1, 54.0*scale+1, 11.0*scale-1, 108.0*scale-1)
-	worldshapes[4] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, 110.5*scale+1, 220.0*scale-1, 11.0*scale-1)
-	worldshapes[5] = love.physics.newRectangleShape(fieldbody, 112.5*scale+1, -61.0*scale+1, 11.0*scale-1, 94.0*scale-1)
-	worldshapes[6] = love.physics.newRectangleShape(fieldbody, 112.5*scale+1, 54.0*scale+1, 11.0*scale-1, 108.0*scale-1)
-	worldshapes[7] = love.physics.newRectangleShape(fieldbody, -80.0*scale+1, -84.0*scale+1, 26.0*scale-1, 14.0*scale-1);worldshapes[7]:setCategory( 2 )
-	worldshapes[8] = love.physics.newRectangleShape(fieldbody, -36.0*scale+1, -84.0*scale+1, 34.0*scale-1, 14.0*scale-1);worldshapes[8]:setCategory( 2 )
-	worldshapes[9] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, -91.5*scale+1, 10.0*scale-1, 29.0*scale-1);worldshapes[9]:setCategory( 2 )
-	worldshapes[10] = love.physics.newRectangleShape(fieldbody, 36.0*scale+1, -84.0*scale+1, 34.0*scale-1, 14.0*scale-1);worldshapes[10]:setCategory( 2 )
-	worldshapes[11] = love.physics.newRectangleShape(fieldbody, 80.0*scale+1, -84.0*scale+1, 26.0*scale-1, 14.0*scale-1);worldshapes[11]:setCategory( 2 )
-	worldshapes[12] = love.physics.newRectangleShape(fieldbody, -80.0*scale+1, -59.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldshapes[12]:setCategory( 2 )
-	worldshapes[13] = love.physics.newRectangleShape(fieldbody, -48.0*scale+1, -38.5*scale+1, 10.0*scale-1, 49.0*scale-1);worldshapes[13]:setCategory( 2 )
-	worldshapes[14] = love.physics.newRectangleShape(fieldbody, -31.5*scale+1, -38.5*scale+1, 25.0*scale-1, 7.0*scale-1);worldshapes[14]:setCategory( 2 )
-	worldshapes[15] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, -59.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldshapes[15]:setCategory( 2 )
-	worldshapes[16] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, -46.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldshapes[16]:setCategory( 2 )
-	worldshapes[17] = love.physics.newRectangleShape(fieldbody, 48.0*scale+1, -38.5*scale+1, 10.0*scale-1, 49.0*scale-1);worldshapes[17]:setCategory( 2 )
-	worldshapes[18] = love.physics.newRectangleShape(fieldbody, 31.5*scale+1, -38.5*scale+1, 25.0*scale-1, 7.0*scale-1);worldshapes[18]:setCategory( 2 )
-	worldshapes[19] = love.physics.newRectangleShape(fieldbody, 80.0*scale+1, -59.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldshapes[19]:setCategory( 2 )
-	worldshapes[20] = love.physics.newRectangleShape(fieldbody, 88.5*scale+1, -28.0*scale+1, 43.0*scale-1, 28.0*scale-1)
-	worldshapes[21] = love.physics.newRectangleShape(fieldbody, -88.5*scale+1, -28.0*scale+1, 43.0*scale-1, 28.0*scale-1)
-	worldshapes[22] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, -7.0*scale+1, 58.0*scale-1, 28.0*scale-1);worldshapes[22]:setCategory( 2 )
-	worldshapes[23] = love.physics.newRectangleShape(fieldbody, -88.5*scale+1, 14.0*scale+1, 43.0*scale-1, 28.0*scale-1)
-	worldshapes[24] = love.physics.newRectangleShape(fieldbody, -48.0*scale+1, 14.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldshapes[24]:setCategory( 2 )
-	worldshapes[25] = love.physics.newRectangleShape(fieldbody, 48.0*scale+1, 14.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldshapes[25]:setCategory( 2 )
-	worldshapes[26] = love.physics.newRectangleShape(fieldbody, 88.5*scale+1, 14.0*scale+1, 43.0*scale-1, 28.0*scale-1)
-	worldshapes[27] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, 24.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldshapes[27]:setCategory( 2 )
-	worldshapes[28] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, 38.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldshapes[28]:setCategory( 2 )
-	worldshapes[29] = love.physics.newRectangleShape(fieldbody, -80.0*scale+1, 45.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldshapes[29]:setCategory( 2 )
-	worldshapes[30] = love.physics.newRectangleShape(fieldbody, -36.0*scale+1, 45.5*scale+1, 34.0*scale-1, 7.0*scale-1);worldshapes[30]:setCategory( 2 )
-	worldshapes[31] = love.physics.newRectangleShape(fieldbody, 36.0*scale+1, 45.5*scale+1, 34.0*scale-1, 7.0*scale-1);worldshapes[31]:setCategory( 2 )
-	worldshapes[32] = love.physics.newRectangleShape(fieldbody, 80.0*scale+1, 45.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldshapes[32]:setCategory( 2 )
-	worldshapes[33] = love.physics.newRectangleShape(fieldbody, -72.0*scale+1, 56.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldshapes[33]:setCategory( 2 )
-	worldshapes[34] = love.physics.newRectangleShape(fieldbody, -99.5*scale+1, 66.5*scale+1, 17.0*scale-1, 7.0*scale-1);worldshapes[34]:setCategory( 2 )
-	worldshapes[35] = love.physics.newRectangleShape(fieldbody, 72.0*scale+1, 56.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldshapes[35]:setCategory( 2 )
-	worldshapes[36] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, 66.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldshapes[36]:setCategory( 2 )
-	worldshapes[37] = love.physics.newRectangleShape(fieldbody, 0.0*scale+1, 80.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldshapes[37]:setCategory( 2 )
-	worldshapes[38] = love.physics.newRectangleShape(fieldbody, 99.5*scale+1, 66.5*scale+1, 17.0*scale-1, 7.0*scale-1);worldshapes[38]:setCategory( 2 )
-	worldshapes[39] = love.physics.newRectangleShape(fieldbody, -48.0*scale+1, 74.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldshapes[39]:setCategory( 2 )
-	worldshapes[40] = love.physics.newRectangleShape(fieldbody, -56.0*scale+1, 87.5*scale+1, 74.0*scale-1, 7.0*scale-1);worldshapes[40]:setCategory( 2 )
-	worldshapes[41] = love.physics.newRectangleShape(fieldbody, 48.0*scale+1, 74.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldshapes[41]:setCategory( 2 )
-	worldshapes[42] = love.physics.newRectangleShape(fieldbody, 56.0*scale+1, 87.5*scale+1, 74.0*scale-1, 7.0*scale-1);worldshapes[42]:setCategory( 2 )
+	worldfixtures[1] = newwall(fieldbody, 0.0*scale+1, -110.5*scale+1, 220.0*scale-1, 11.0*scale-1)
+	worldfixtures[2] = newwall(fieldbody, -112.5*scale+1, -61.0*scale+1, 11.0*scale-1, 94.0*scale-1)
+	worldfixtures[3] = newwall(fieldbody, -112.5*scale+1, 54.0*scale+1, 11.0*scale-1, 108.0*scale-1)
+	worldfixtures[4] = newwall(fieldbody, 0.0*scale+1, 110.5*scale+1, 220.0*scale-1, 11.0*scale-1)
+	worldfixtures[5] = newwall(fieldbody, 112.5*scale+1, -61.0*scale+1, 11.0*scale-1, 94.0*scale-1)
+	worldfixtures[6] = newwall(fieldbody, 112.5*scale+1, 54.0*scale+1, 11.0*scale-1, 108.0*scale-1)
+	worldfixtures[7] = newwall(fieldbody, -80.0*scale+1, -84.0*scale+1, 26.0*scale-1, 14.0*scale-1);worldfixtures[7]:setCategory( 2 )
+	worldfixtures[8] = newwall(fieldbody, -36.0*scale+1, -84.0*scale+1, 34.0*scale-1, 14.0*scale-1);worldfixtures[8]:setCategory( 2 )
+	worldfixtures[9] = newwall(fieldbody, 0.0*scale+1, -91.5*scale+1, 10.0*scale-1, 29.0*scale-1);worldfixtures[9]:setCategory( 2 )
+	worldfixtures[10] = newwall(fieldbody, 36.0*scale+1, -84.0*scale+1, 34.0*scale-1, 14.0*scale-1);worldfixtures[10]:setCategory( 2 )
+	worldfixtures[11] = newwall(fieldbody, 80.0*scale+1, -84.0*scale+1, 26.0*scale-1, 14.0*scale-1);worldfixtures[11]:setCategory( 2 )
+	worldfixtures[12] = newwall(fieldbody, -80.0*scale+1, -59.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldfixtures[12]:setCategory( 2 )
+	worldfixtures[13] = newwall(fieldbody, -48.0*scale+1, -38.5*scale+1, 10.0*scale-1, 49.0*scale-1);worldfixtures[13]:setCategory( 2 )
+	worldfixtures[14] = newwall(fieldbody, -31.5*scale+1, -38.5*scale+1, 25.0*scale-1, 7.0*scale-1);worldfixtures[14]:setCategory( 2 )
+	worldfixtures[15] = newwall(fieldbody, 0.0*scale+1, -59.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldfixtures[15]:setCategory( 2 )
+	worldfixtures[16] = newwall(fieldbody, 0.0*scale+1, -46.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldfixtures[16]:setCategory( 2 )
+	worldfixtures[17] = newwall(fieldbody, 48.0*scale+1, -38.5*scale+1, 10.0*scale-1, 49.0*scale-1);worldfixtures[17]:setCategory( 2 )
+	worldfixtures[18] = newwall(fieldbody, 31.5*scale+1, -38.5*scale+1, 25.0*scale-1, 7.0*scale-1);worldfixtures[18]:setCategory( 2 )
+	worldfixtures[19] = newwall(fieldbody, 80.0*scale+1, -59.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldfixtures[19]:setCategory( 2 )
+	worldfixtures[20] = newwall(fieldbody, 88.5*scale+1, -28.0*scale+1, 43.0*scale-1, 28.0*scale-1)
+	worldfixtures[21] = newwall(fieldbody, -88.5*scale+1, -28.0*scale+1, 43.0*scale-1, 28.0*scale-1)
+	worldfixtures[22] = newwall(fieldbody, 0.0*scale+1, -7.0*scale+1, 58.0*scale-1, 28.0*scale-1);worldfixtures[22]:setCategory( 2 )
+	worldfixtures[23] = newwall(fieldbody, -88.5*scale+1, 14.0*scale+1, 43.0*scale-1, 28.0*scale-1)
+	worldfixtures[24] = newwall(fieldbody, -48.0*scale+1, 14.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldfixtures[24]:setCategory( 2 )
+	worldfixtures[25] = newwall(fieldbody, 48.0*scale+1, 14.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldfixtures[25]:setCategory( 2 )
+	worldfixtures[26] = newwall(fieldbody, 88.5*scale+1, 14.0*scale+1, 43.0*scale-1, 28.0*scale-1)
+	worldfixtures[27] = newwall(fieldbody, 0.0*scale+1, 24.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldfixtures[27]:setCategory( 2 )
+	worldfixtures[28] = newwall(fieldbody, 0.0*scale+1, 38.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldfixtures[28]:setCategory( 2 )
+	worldfixtures[29] = newwall(fieldbody, -80.0*scale+1, 45.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldfixtures[29]:setCategory( 2 )
+	worldfixtures[30] = newwall(fieldbody, -36.0*scale+1, 45.5*scale+1, 34.0*scale-1, 7.0*scale-1);worldfixtures[30]:setCategory( 2 )
+	worldfixtures[31] = newwall(fieldbody, 36.0*scale+1, 45.5*scale+1, 34.0*scale-1, 7.0*scale-1);worldfixtures[31]:setCategory( 2 )
+	worldfixtures[32] = newwall(fieldbody, 80.0*scale+1, 45.5*scale+1, 26.0*scale-1, 7.0*scale-1);worldfixtures[32]:setCategory( 2 )
+	worldfixtures[33] = newwall(fieldbody, -72.0*scale+1, 56.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldfixtures[33]:setCategory( 2 )
+	worldfixtures[34] = newwall(fieldbody, -99.5*scale+1, 66.5*scale+1, 17.0*scale-1, 7.0*scale-1);worldfixtures[34]:setCategory( 2 )
+	worldfixtures[35] = newwall(fieldbody, 72.0*scale+1, 56.0*scale+1, 10.0*scale-1, 28.0*scale-1);worldfixtures[35]:setCategory( 2 )
+	worldfixtures[36] = newwall(fieldbody, 0.0*scale+1, 66.5*scale+1, 58.0*scale-1, 7.0*scale-1);worldfixtures[36]:setCategory( 2 )
+	worldfixtures[37] = newwall(fieldbody, 0.0*scale+1, 80.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldfixtures[37]:setCategory( 2 )
+	worldfixtures[38] = newwall(fieldbody, 99.5*scale+1, 66.5*scale+1, 17.0*scale-1, 7.0*scale-1);worldfixtures[38]:setCategory( 2 )
+	worldfixtures[39] = newwall(fieldbody, -48.0*scale+1, 74.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldfixtures[39]:setCategory( 2 )
+	worldfixtures[40] = newwall(fieldbody, -56.0*scale+1, 87.5*scale+1, 74.0*scale-1, 7.0*scale-1);worldfixtures[40]:setCategory( 2 )
+	worldfixtures[41] = newwall(fieldbody, 48.0*scale+1, 74.0*scale+1, 10.0*scale-1, 22.0*scale-1);worldfixtures[41]:setCategory( 2 )
+	worldfixtures[42] = newwall(fieldbody, 56.0*scale+1, 87.5*scale+1, 74.0*scale-1, 7.0*scale-1);worldfixtures[42]:setCategory( 2 )
 	
 	--59 590
 	--paccy
-	pacmanbody = love.physics.newBody(world, screenwidth/2, screenheight/2+(boardheight*0.26)*scale, 0.1)
-	pacmanbody:setBullet(true)
-	pacmanbody:setInertia( 0.001 )
-	pacmanshape = love.physics.newCircleShape(pacmanbody, 0, 0, 6.5*scale)
-	pacmanshape:setFriction( 1000)
-	pacmanshape:setMask(3)
-	
+	pacmanbody = love.physics.newBody(world, screenwidth/2, screenheight/2+(boardheight*0.26)*scale, "dynamic")
+	pacmanfixture = newball(pacmanbody, 6.5*scale)
+	pacmanfixture:setMask(3)
+
 	--ghosties!
 	ghostbody = {}
-	ghostshape = {}
+	ghostfixture = {}
 	for i = 1, 3 do
-		ghostbody[i] = love.physics.newBody(world, screenwidth/2 + (i-2)*15*scale, screenheight/2-(boardheight*0.125)*scale, 0.1)
-		ghostbody[i]:setBullet(true)
-		ghostbody[i]:setInertia(0.001 )
-		ghostshape[i] = love.physics.newCircleShape(ghostbody[i], 0, 0, 6.5*scale)
-		ghostshape[i]:setFriction(1000)
-		ghostshape[i]:setCategory(3)
+		ghostbody[i] = love.physics.newBody(world, screenwidth/2 + (i-2)*15*scale, screenheight/2-(boardheight*0.125)*scale, "dynamic")
+		ghostfixture[i] = newball(ghostbody[i], 6.5*scale)
+		ghostfixture[i]:setCategory(3)
 	end
 end
 
@@ -564,7 +557,7 @@ end
 function normal_updategravity(dt) --"rotates" the world. (It actually only changes the gravity "direction" because actually rotating the world caused centrifugalforces to be a bitch)
 	--smooth targetrotation into rotation
 	
-	targetrotation = math.mod(targetrotation+360, 360)
+	targetrotation = math.fmod(targetrotation+360, 360)
 	
 	if targetrotation > rotation + 180 then
 		rotation = rotation + 360
@@ -664,8 +657,9 @@ end
 
 function normal_gamefinished()	
 	normal_stopgamesounds()
-	love.mouse.setGrab(false)
+	love.mouse.setGrabbed(false)
 	love.mouse.setVisible(true)
+	love.mouse.setRelativeMode(false)
 	if eatored == 244 then
 		gamewin:play()
 	end	
