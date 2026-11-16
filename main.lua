@@ -139,6 +139,10 @@ end
 function love.keypressed(key)
 	keyjustpressed = true
 
+	if key == "lshift" and (gamestate == "menu" or gamestate == "options") then
+		key = "return"
+	end
+
 	if _G[gamestate .. "_keypressed"] then
 		_G[gamestate .. "_keypressed"](key)
 	end
