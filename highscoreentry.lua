@@ -2,6 +2,7 @@ function highscoreentry_load(i)
 	high = i
 	gamestate = "highscoreentry"
 	currentletter = 1
+	lockletter = false
 	cursortimer = 0
 	timetimer = 0
 	cursorblink = true
@@ -55,11 +56,18 @@ function highscoreentry_draw()
 	
 	if high ~= 0 then
 		love.graphics.setColor(1, 1, 1)
-		if cursorblink then
-			love.graphics.print("> " .. highscoreA[high][3] .. string.rep("_", 6-string.len(highscoreA[high][3])), x-55*scale, 137*scale, 0, scale*1.5)
-		else
-			love.graphics.print("> " .. highscoreA[high][3] .. " " .. string.rep("_", 5-string.len(highscoreA[high][3])), x-55*scale, 137*scale, 0, scale*1.5)
+		local name = highscoreA[high][3]
+		if name:len() < 6 then
+			local letter = " "
+			if cursorblink then
+				letter = letters:sub(currentletter, currentletter)
+				if letter == " " then
+					letter = "_"
+				end
+			end
+			name = name .. letter .. string.rep("_", 5-name:len())
 		end
+		love.graphics.print("> " .. name, x-55*scale, 137*scale, 0, scale*1.5)
 	end
 	for x = 1, 3 do
 		for y = 1, 3 do
@@ -81,7 +89,21 @@ function highscoreentry_joystickpressed(joy, button)
 
 end
 
+function highscoreentry_keyreleased(key)
+	if key == "lshift" and lockletter then
+		lockletter = false
+		if high ~= 0 and string.len(highscoreA[high][3]) < 6 then
+			cursorblink = true
+			highscoreA[high][3] = highscoreA[high][3] .. letters:sub(currentletter, currentletter)
+			local sound = _G["wakka" .. math.fmod(#highscoreA[high][3], 2)+1]
+			sound:stop()
+			sound:play()
+		end
+	end
+end
+
 function highscoreentry_textinput(text)
+	lockletter = false
 	if high == 0 then
 		return
 	end
@@ -97,6 +119,7 @@ function highscoreentry_textinput(text)
 		if string.len(highscoreA[high][3]) < 6 then
 			cursorblink = true
 			highscoreA[high][3] = highscoreA[high][3] .. char
+			currentletter = 1
 			local sound = _G["wakka" .. math.fmod(#highscoreA[high][3], 2)+1]
 			sound:stop()
 			sound:play()
@@ -113,6 +136,17 @@ function highscoreentry_keypressed(key)
 	if key == "return" then
 		savehighscoresA()
 		menu_load()
+	elseif key == "down" or key == "up" then
+		if key == "down" then
+			currentletter = currentletter % #letters + 1
+		else
+			currentletter = (currentletter - 2) % #letters + 1
+		end
+		cursorblink = true
+		cursortimer = 0
+	elseif key == "lshift" then
+		--locked in when it's let go, unless it was held for a capital letter
+		lockletter = true
 	elseif key == "backspace" then
 		if highscoreA[high][3]:len() > 0 then
 			cursorblink = true

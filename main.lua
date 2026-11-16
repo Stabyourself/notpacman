@@ -56,6 +56,8 @@ function love.load()
 	mouthduration = 0.22
 	
 	whitelist = "abcdefghijklmnopqrstuvwxyz 0123456789"
+	--picked with up/down in the highscore entry and locked in with left shift, for gamepads
+	letters = " abcdefghijklmnopqrstuvwxyz0123456789"
 	
 	scale = 2
 	
@@ -139,12 +141,18 @@ end
 function love.keypressed(key)
 	keyjustpressed = true
 
-	if key == "lshift" and (gamestate == "menu" or gamestate == "options" or gamestate == "highscoreentry") then
+	if key == "lshift" and (gamestate == "menu" or gamestate == "options") then
 		key = "return"
 	end
 
 	if _G[gamestate .. "_keypressed"] then
 		_G[gamestate .. "_keypressed"](key)
+	end
+end
+
+function love.keyreleased(key)
+	if _G[gamestate .. "_keyreleased"] then
+		_G[gamestate .. "_keyreleased"](key)
 	end
 end
 
