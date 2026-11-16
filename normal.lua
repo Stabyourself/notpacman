@@ -481,7 +481,6 @@ end
 function normal_createworld() --creates world and all physics objects
 	local scale = 2
 	world = love.physics.newWorld(0, 800, false)
-	world:setCallbacks(nil, nil, wallpresolve)
 
 	fieldbody = love.physics.newBody(world, screenwidth / 2, screenheight / 2, "static")
 	worldfixtures = {}

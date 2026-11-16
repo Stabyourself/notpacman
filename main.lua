@@ -21,8 +21,7 @@ function love.load()
 	
 	gravitymul = 260
 	wallshrink = 0.3 --box2d polygon skin
-	wallrelease = 0.7
-	wallfriction = 1000
+	wallfriction = 0.5
 	ballfriction = 0.5
 
 	scale = 2
@@ -312,27 +311,6 @@ function newball(body, radius)
 	body:setMassData(0, 0, 0.1, 0.9)
 	body:setBullet(true)
 	return fixture
-end
-
-function wallpresolve(a, b, contact)
-	--balls got stuck in corners, so walls let go when gravity pulls the ball away
-	local ball, nx, ny
-	if a:getBody():getType() == "static" then
-		ball = b:getBody()
-		nx, ny = contact:getNormal()
-		nx, ny = -nx, -ny
-	elseif b:getBody():getType() == "static" then
-		ball = a:getBody()
-		nx, ny = contact:getNormal()
-	else
-		return
-	end
-	
-	local gx, gy = ball:getWorld():getGravity()
-	local vx, vy = ball:getLinearVelocity()
-	if gx*nx + gy*ny < -wallrelease*math.sqrt(gx^2 + gy^2) and vx*nx + vy*ny < 1 then
-		contact:setEnabled(false)
-	end
 end
 
 function grabmouse()

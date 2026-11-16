@@ -26,7 +26,6 @@ end
 function options_createdemoworld()
 	--demo world
 	demoworld = love.physics.newWorld(0, 800, false)
-	demoworld:setCallbacks(nil, nil, wallpresolve)
 
 	demofieldbody = love.physics.newBody(demoworld, screenwidth / 2, screenheight / 2, "static")
 
