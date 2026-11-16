@@ -139,7 +139,7 @@ end
 function love.keypressed(key)
 	keyjustpressed = true
 
-	if key == "lshift" and (gamestate == "menu" or gamestate == "options") then
+	if key == "lshift" and (gamestate == "menu" or gamestate == "options" or gamestate == "highscoreentry") then
 		key = "return"
 	end
 
